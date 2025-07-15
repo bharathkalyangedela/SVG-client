@@ -12,7 +12,16 @@ set DAEMON_PID_FILE=auto-update.pid
 REM Load configuration
 if exist "%%CONFIG_FILE%%" (
     for /f "tokens=1,2 delims==" %%a in (%%CONFIG_FILE%%) do (
-        if "%%a"=="UPDATE_INTERVAL" set UPDATE_INTERVAL=%%b
+        if "%%a"=="UPDATE_INTERVAL" (
+            REM Validate interval is numeric and within range
+            set TEMP_INTERVAL=%%b
+            if %%b geq 60 if %%b leq 86400 (
+                set UPDATE_INTERVAL=%%b
+            ) else (
+                echo [WARNING] Invalid interval %%b, using default 21600
+                set UPDATE_INTERVAL=21600
+            )
+        )
         if "%%a"=="AUTO_UPDATE_ENABLED" set AUTO_UPDATE_ENABLED=%%b
         if "%%a"=="LOG_LEVEL" set LOG_LEVEL=%%b
     )
@@ -21,6 +30,7 @@ if exist "%%CONFIG_FILE%%" (
     echo AUTO_UPDATE_ENABLED=true >> %%CONFIG_FILE%%
     echo LOG_LEVEL=INFO >> %%CONFIG_FILE%%
     set AUTO_UPDATE_ENABLED=true
+    set UPDATE_INTERVAL=21600
 )
 
 REM Create PID file immediately to indicate daemon is starting
@@ -34,6 +44,11 @@ if "%%AUTO_UPDATE_ENABLED%%"=="false" (
     timeout /t 3600 /nobreak >nul
     goto auto_update_loop
 )
+
+REM Validate UPDATE_INTERVAL before using
+if not defined UPDATE_INTERVAL set UPDATE_INTERVAL=21600
+if %%UPDATE_INTERVAL%% lss 60 set UPDATE_INTERVAL=21600
+if %%UPDATE_INTERVAL%% gtr 86400 set UPDATE_INTERVAL=21600
 
 REM Log current check
 echo [%%date%% %%time%%] Starting auto-update check... >> %%LOG_FILE%%
@@ -90,6 +105,15 @@ ECHO is off.
 )
 
 :wait_next_check
-REM Wait for next check interval
-timeout /t %%UPDATE_INTERVAL%% /nobreak >nul
+REM Wait for next check interval - handle large timeouts by breaking into chunks
+set REMAINING_TIME=%%UPDATE_INTERVAL%%
+echo [%%date%% %%time%%] Waiting %%UPDATE_INTERVAL%% seconds until next check... >> %%LOG_FILE%%
+:wait_loop
+if %%REMAINING_TIME%% gtr 3600 (
+    timeout /t 3600 /nobreak >nul
+    set /a REMAINING_TIME=%%REMAINING_TIME%%-3600
+    goto wait_loop
+) else if %%REMAINING_TIME%% gtr 0 (
+    timeout /t %%REMAINING_TIME%% /nobreak >nul
+)
 goto auto_update_loop
