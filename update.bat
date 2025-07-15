@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 echo 🔄 Checking for Stereo Video Generator updates...
 
 REM Create restore point
-set RESTORE_POINT=20251507_155606
+set RESTORE_POINT=20251507_155715
 set RESTORE_POINT= =0
 echo [INFO] Creating restore point: 
 
