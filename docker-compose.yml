@@ -1,0 +1,204 @@
+services:
+  api:
+    image: bharathbalu/stereo-video-generation-app-api:latest
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - uploads_data:/app/uploads
+      - outputs_data:/app/outputs
+      - tests_data:/app/tests
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/svg
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  postgres:
+    image: postgres:14
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: svg
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  celery_worker:
+    image: bharathbalu/stereo-video-generation-app-celery:latest
+    container_name: celery_worker-1
+    restart: always
+    command: ["celery", "-A", "app.workers.tasks", "worker", "--loglevel=info"]
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/svg
+      - REDIS_URL=redis://redis:6379/0
+      - SKIP_DB_INIT=true
+    volumes:
+      - outputs_data:/app/outputs
+      - uploads_data:/app/uploads
+    depends_on:
+      - postgres
+      - redis
+      - api
+
+  depthcrafter:
+    image: bharathbalu/depthcrafter:latest
+    container_name: depthcrafter-1
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - outputs_data:/app/outputs
+      - uploads_data:/app/uploads
+      - tests_data:/app/tests
+      - depthcrafter_cache:/root/.cache
+    ports:
+      - "8002:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  ml_depth_pro:
+    image: bharathbalu/ml-depth-pro:latest
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - tests_data:/app/tests
+      - ml_depth_pro_cache:/root/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  marigold:
+    image: bharathbalu/marigold:latest
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - tests_data:/app/tests
+      - marigold_cache:/root/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  rolling_depth:
+    image: bharathbalu/rolling-depth:latest
+    container_name: rolling-depth-1
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - outputs_data:/app/outputs
+      - uploads_data:/app/uploads
+      - tests_data:/app/tests
+      - rolling_depth_cache:/root/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  distill_any_depth:
+    image: bharathbalu/distill-any-depth:latest
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - outputs_data:/app/outputs
+      - tests_data:/app/tests
+      - distill_any_depth_cache:/root/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  video_depth_anything:
+    image: bharathbalu/video-depth-anything:latest
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - outputs_data:/app/outputs
+      - uploads_data:/app/uploads
+      - tests_data:/app/tests
+      - video_depth_anything_cache:/root/.cache
+    ports:
+      - "8003:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  depth_to_stereo:
+    image: bharathbalu/depth-to-stereo:latest
+    container_name: 3d-pipeline-1
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - outputs_data:/app/outputs
+      - uploads_data:/app/uploads
+      - depth_to_stereo_cache:/root/.cache
+    ports:
+      - "8001:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  frontend:
+    image: bharathbalu/stereo-video-generation-app-frontend:latest
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
+volumes:
+  redis_data: 
+  postgres_data:
+  uploads_data:
+  outputs_data:
+  tests_data:
+  depthcrafter_cache:
+  ml_depth_pro_cache:
+  marigold_cache:
+  rolling_depth_cache:
+  distill_any_depth_cache:
+  video_depth_anything_cache:
+  depth_to_stereo_cache:

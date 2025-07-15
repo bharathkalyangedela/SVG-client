@@ -1,0 +1,22 @@
+{
+  "version": "v1.0.0",
+  "release_date": "15-07-2025",
+  "docker_hub_username": "bharathbalu",
+  "images": [
+    "stereo-video-generation-app-api",
+    "stereo-video-generation-app-celery", 
+    "stereo-video-generation-app-frontend",
+    "depthcrafter",
+    "rolling-depth",
+    "video-depth-anything",
+    "distill-any-depth",
+    "ml-depth-pro",
+    "marigold",
+    "depth-to-stereo"
+  ],
+  "infrastructure_images": {
+    "note": "Redis and Postgres use official images, not custom ones",
+    "redis": "redis:alpine",
+    "postgres": "postgres:14"
+  }
+}
