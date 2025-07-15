@@ -89,6 +89,7 @@ if exist "docker-compose.yml.restore.^^" (
     echo [WARNING] No restore point available
 )
 
+:smart_docker_update
 REM Smart Docker update - only restart if images changed
 echo [INFO] Checking for Docker image updates...
 set IMAGES_UPDATED=false
