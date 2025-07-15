@@ -10,19 +10,26 @@ if exist "auto-update.pid" (
     echo    🔴 Daemon: STOPPED
 )
 
+REM Read configuration with proper parsing
+set AUTO_UPDATE_STATUS=DISABLED
+set UPDATE_INTERVAL_VALUE=21600
 if exist "auto-update-config.txt" (
-    for /f "tokens=1,2 delims==" %%a in (auto-update-config.txt) do (
+    for /f "usebackq tokens=1,2 delims==" %%a in ("auto-update-config.txt") do (
         if "%%a"=="AUTO_UPDATE_ENABLED" (
             if "%%b"=="true" (
-                echo    ✅ Auto-Updates: ENABLED
+                set AUTO_UPDATE_STATUS=ENABLED
             ) else (
-                echo    ❌ Auto-Updates: DISABLED
+                set AUTO_UPDATE_STATUS=DISABLED  
             )
         )
-        if "%%a"=="UPDATE_INTERVAL" echo    ⏰ Check Interval: %%b seconds
+        if "%%a"=="UPDATE_INTERVAL" set UPDATE_INTERVAL_VALUE=%%b
     )
+    echo    ✅ Auto-Updates: ^
+    echo    ⏰ Check Interval: ^ seconds
 ) else (
     echo    ⚠️  Configuration: NOT FOUND
+    echo    ❌ Auto-Updates: DISABLED
+    echo    ⏰ Check Interval: 21600 seconds (default)
 )
 
 echo ====================================
@@ -81,22 +88,28 @@ if "%%choice%%"=="4" (
 if "%%choice%%"=="5" (
     if exist "auto-update.pid" (
         echo ⚠️  Daemon appears to be already running
+        echo    (If not actually running, delete auto-update.pid and try again)
     ) else (
         echo 🚀 Starting auto-update daemon...
         start "" /min "auto-update-daemon.bat"
-        timeout /t 2 /nobreak >nul
+        timeout /t 3 /nobreak >nul
         if exist "auto-update.pid" (
             echo ✅ [SUCCESS] Daemon started successfully
         ) else (
-            echo ❌ [ERROR] Failed to start daemon
+            echo ❌ [ERROR] Failed to start daemon - check auto-update.log for details
         )
     )
 )
 if "%%choice%%"=="6" (
     echo 🛑 Stopping auto-update daemon...
-    taskkill /f /im cmd.exe /fi "WINDOWTITLE eq auto-update-daemon*" 2>nul
-    del auto-update.pid 2>nul
-    echo ✅ [SUCCESS] Daemon stopped
+    if exist "auto-update.pid" (
+        REM Kill daemon process and clean up
+        taskkill /f /im cmd.exe /fi "WINDOWTITLE eq auto-update-daemon*" 2^>nul
+        del auto-update.pid 2^>nul
+        echo ✅ [SUCCESS] Daemon stopped and PID file removed
+    ) else (
+        echo ℹ️  Daemon was not running (no PID file found)
+    )
 )
 if "%%choice%%"=="7" (
     echo 🔧 Installing as Windows Service...

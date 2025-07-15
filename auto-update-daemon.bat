@@ -23,12 +23,14 @@ if exist "%%CONFIG_FILE%%" (
     set AUTO_UPDATE_ENABLED=true
 )
 
-REM Create PID file
-echo %%RANDOM%% > %%DAEMON_PID_FILE%%
+REM Create PID file immediately to indicate daemon is starting
+echo %%RANDOM%%_%%TIME%% > %%DAEMON_PID_FILE%%
+echo [INFO] Auto-update daemon started with PID file: %%DAEMON_PID_FILE%%
 
 :auto_update_loop
 REM Check if auto-update is enabled
 if "%%AUTO_UPDATE_ENABLED%%"=="false" (
+    echo [%%date%% %%time%%] Auto-updates disabled, sleeping for 1 hour... >> %%LOG_FILE%%
     timeout /t 3600 /nobreak >nul
     goto auto_update_loop
 )
