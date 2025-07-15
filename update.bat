@@ -1,25 +1,26 @@
 @echo off
 setlocal enabledelayedexpansion
+chcp 65001 >nul 2>&1
 echo 🔄 Checking for Stereo Video Generator updates...
 
 REM Create restore point with proper timestamp
-for /f "tokens=2-4 delims=/ " %%a in ('date /t') do set MYDATE=%%c%%a%%b
-for /f "tokens=1-2 delims=: " %%a in ('time /t') do set MYTIME=%%a%%b
-set MYTIME=%%MYTIME: =0%%
-set RESTORE_POINT=%%MYDATE%%_%%MYTIME%%
-echo [INFO] Creating restore point: %%RESTORE_POINT%%
+for /f "tokens=1-3 delims=/" %%a in ('date /t') do set DATESTAMP=%%c%%a%%b
+for /f "tokens=1-2 delims=:" %%a in ('time /t') do set TIMESTAMP=%%a%%b
+set TIMESTAMP=^ =0^
+set RESTORE_POINT=^_^
+echo [INFO] Creating restore point: ^
 
 REM Backup entire current state
 if exist "docker-compose.yml" (
-    copy docker-compose.yml docker-compose.yml.restore.%%RESTORE_POINT%% >nul 2>&1
+    copy docker-compose.yml docker-compose.yml.restore.^ >nul 2>&1
     echo [SUCCESS] Configuration backed up
 )
 if exist "version-info.json" (
-    copy version-info.json version-info.json.restore.%%RESTORE_POINT%% >nul 2>&1
+    copy version-info.json version-info.json.restore.^ >nul 2>&1
 )
 
 REM Store current running containers for rollback
-docker-compose ps > running-services.restore.%%RESTORE_POINT%% 2>nul
+docker-compose ps > running-services.restore.^ 2>nul
 
 REM Check if git is available for configuration updates
 git --version >nul 2>&1
@@ -88,35 +89,44 @@ if exist "docker-compose.yml.restore.^^" (
     echo [WARNING] No restore point available
 )
 
-:smart_docker_update
 REM Smart Docker update - only restart if images changed
 echo [INFO] Checking for Docker image updates...
 set IMAGES_UPDATED=false
 
 REM Get current image info before pull
-docker-compose images --format "table {{.Service}}\t{{.Image}}\t{{.ID}}" > before-images.tmp 2>nul
+docker-compose config --services > services.tmp 2>nul
+set IMAGE_HASH_BEFORE=
+for /f %%s in (services.tmp) do (
+    for /f "tokens=3" %%i in ('docker-compose images %%s 2^>nul') do (
+        if not "%%i"=="IMAGE" set IMAGE_HASH_BEFORE=^%%i
+    )
+)
 
 REM Pull latest Docker images
 echo [INFO] Pulling latest Docker images from Docker Hub...
 docker-compose pull
 if errorlevel 1 (
     echo [ERROR] Failed to pull latest images
-    del before-images.tmp 2>nul
+    del services.tmp 2>nul
     goto show_rollback_options
 )
 
 REM Check if images were actually updated
-docker-compose images --format "table {{.Service}}\t{{.Image}}\t{{.ID}}" > after-images.tmp 2>nul
-fc before-images.tmp after-images.tmp >nul 2>&1
-if errorlevel 1 (
+set IMAGE_HASH_AFTER=
+for /f %%s in (services.tmp) do (
+    for /f "tokens=3" %%i in ('docker-compose images %%s 2^>nul') do (
+        if not "%%i"=="IMAGE" set IMAGE_HASH_AFTER=^%%i
+    )
+)
+
+del services.tmp 2>nul
+
+if not "^^"=="^^" (
     set IMAGES_UPDATED=true
     echo [INFO] 🆕 New Docker images detected, restart required
 ) else (
     echo [INFO] ✅ Docker images are up to date, no restart needed
 )
-
-REM Clean up temp files
-del before-images.tmp after-images.tmp 2>nul
 
 REM Only restart if images were actually updated
 if "^^"=="true" (
@@ -131,7 +141,7 @@ if "^^"=="true" (
     REM Verify services are healthy
     echo [INFO] Verifying services are running...
     timeout /t 15 /nobreak >nul
-    docker-compose ps ^| findstr "Up" >nul
+    docker-compose ps ^| findstr "Up" ^>nul
     if errorlevel 1 (
         echo [WARNING] Some services may not be running properly
         goto show_rollback_options
@@ -146,12 +156,12 @@ echo 🌐 Frontend: http://localhost:3000
 echo 📚 API Docs: http://localhost:8000/docs
 echo.
 
-REM Cleanup old restore points (keep last 3)
+REM Cleanup old restore points (keep last 3) - FIXED VERSION
 echo [INFO] Cleaning up old restore points...
-set /a CLEANUP_COUNT=0
+set CLEANUP_COUNT=0
 for /f "skip=3" %%f in ('dir /b /o-d *.restore.* 2^>nul') do (
     del "%%f" 2>nul
-    set /a CLEANUP_COUNT+=1
+    set /a CLEANUP_COUNT=CLEANUP_COUNT+1
 )
 if ^ gtr 0 echo [INFO] Cleaned up ^ old restore points
 goto end
