@@ -28,9 +28,22 @@ if errorlevel 1 (
     exit /b 1
 )
 
+REM Get local IP address for network access
+echo Detecting network IP address...
+    for /f "tokens=1" %%b in ("%%a") do (
+        set LOCAL_IP=%%b
+        goto :found_ip
+    )
+)
+:found_ip
+if "%%LOCAL_IP%%"=="" set LOCAL_IP=localhost
+
 echo ✅ Stereo Video Generator started successfully
-echo 🌐 Frontend: http://localhost:3000
-echo 📚 API Docs: http://localhost:8000/docs
+echo.
+echo 🌐 Access URLs:
+echo    Frontend: http://%%LOCAL_IP%%:3000
+echo    API Docs: http://%%LOCAL_IP%%:8000/docs
+echo    Local access: http://localhost:3000
 echo.
 echo 🛠️  Available Scripts:
 echo    - setup.bat: Initial setup and start services
@@ -41,4 +54,6 @@ echo 🔧 Useful Commands:
 echo Run 'docker-compose ps' to check service status
 echo Run 'docker-compose logs -f' to view logs
 echo Run 'docker-compose down' to stop services
+echo.
+echo 💡 Note: Using host network mode for seamless LAN access
 pause
