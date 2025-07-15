@@ -162,9 +162,9 @@ echo [INFO] Cleaning up old restore points...
 set CLEANUP_COUNT=0
 for /f "skip=3" %%f in ('dir /b /o-d *.restore.* 2^>nul') do (
     del "%%f" 2^>nul
-    set /a CLEANUP_COUNT=^+1
+    set /a CLEANUP_COUNT=%%CLEANUP_COUNT%%+1
 )
-if ^ gtr 0 echo [INFO] Cleaned up ^ old restore points
+if %%CLEANUP_COUNT%% gtr 0 echo [INFO] Cleaned up %%CLEANUP_COUNT%% old restore points
 goto end
 
 :rollback_services
