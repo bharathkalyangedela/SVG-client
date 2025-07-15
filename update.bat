@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 echo 🔄 Checking for Stereo Video Generator updates...
 
 REM Create restore point
-set RESTORE_POINT=20251507_155832
+set RESTORE_POINT=20251507_162351
 set RESTORE_POINT= =0
 echo [INFO] Creating restore point: 
 
@@ -20,7 +20,7 @@ REM Store current running containers for rollback
 docker-compose ps > running-services.restore. 2>nul
 
 REM Check if git is available for configuration updates
-git --version >nul 2>&1
+git --version ^>nul 2^>^&1
 if errorlevel 1 (
     echo [INFO] Git not available, using Docker-only update...
     goto docker_update_only
@@ -42,13 +42,13 @@ echo [INFO] Current version:
 
 REM Fetch and check for updates
 echo [INFO] Checking for configuration updates from GitHub...
-git fetch origin 2>nul
+git fetch origin 2^>nul
 if errorlevel 1 (
     echo [WARNING] Could not fetch from GitHub, using Docker-only update
     goto docker_update_only
 )
 
-for /f "tokens=*" %%a in ('git describe --tags origin/main 2>nul') do set LATEST_VERSION=%%a
+for /f "tokens=*" %%a in ('git describe --tags origin/main 2^>nul') do set LATEST_VERSION=%%a
 if ""=="" set LATEST_VERSION=
 echo [INFO] Latest version available: 
 
@@ -61,12 +61,12 @@ echo [INFO] 🆕 New configuration version available:
 echo [INFO] Updating configuration files...
 
 REM Update configuration with validation
-git reset --hard origin/main 2>nul
+git reset --hard origin/main 2^>nul
 if errorlevel 1 goto rollback_config
 
 REM Validate new configuration
 echo [INFO] Validating new configuration...
-docker-compose config >nul 2>&1
+docker-compose config ^>nul 2^>^&1
 if errorlevel 1 (
     echo [ERROR] New configuration is invalid
     goto rollback_config
@@ -118,8 +118,8 @@ echo.
 REM Cleanup old restore points after successful update (keep last 3)
 echo [INFO] Cleaning up old restore points...
 set COUNT=0
-for /f "skip=3" %%f in ('dir /b /o-d *.restore.* 2>nul') do (
-    del "%%f" 2>nul
+for /f "skip=3" %%f in ('dir /b /o-d *.restore.* 2^>nul') do (
+    del "%%f" 2^>nul
     set /a COUNT+=1
 )
 if  gtr 0 echo [INFO] Cleaned up  old restore points
@@ -149,7 +149,7 @@ goto show_rollback_options
 echo 🛠️  ROLLBACK OPTIONS:
 echo.
 echo Available restore points:
-dir /b *.restore.* 2>nul || echo   No restore points found
+dir /b *.restore.* 2^>nul ^|^| echo   No restore points found
 
 echo Manual rollback commands:
 echo   1. Configuration rollback:
