@@ -2,32 +2,34 @@
 setlocal enabledelayedexpansion
 echo 🔄 Checking for Stereo Video Generator updates...
 
-REM Create restore point
-set RESTORE_POINT=20251507_163106
-set RESTORE_POINT= =0
-echo [INFO] Creating restore point: 
+REM Create restore point with proper timestamp
+for /f "tokens=2-4 delims=/ " %%a in ('date /t') do set MYDATE=%%c%%a%%b
+for /f "tokens=1-2 delims=: " %%a in ('time /t') do set MYTIME=%%a%%b
+set MYTIME=%%MYTIME: =0%%
+set RESTORE_POINT=%%MYDATE%%_%%MYTIME%%
+echo [INFO] Creating restore point: %%RESTORE_POINT%%
 
 REM Backup entire current state
 if exist "docker-compose.yml" (
-    copy docker-compose.yml docker-compose.yml.restore. >nul
+    copy docker-compose.yml docker-compose.yml.restore.%%RESTORE_POINT%% >nul 2>&1
     echo [SUCCESS] Configuration backed up
 )
 if exist "version-info.json" (
-    copy version-info.json version-info.json.restore. >nul
+    copy version-info.json version-info.json.restore.%%RESTORE_POINT%% >nul 2>&1
 )
 
 REM Store current running containers for rollback
-docker-compose ps > running-services.restore. 2>nul
+docker-compose ps > running-services.restore.%%RESTORE_POINT%% 2>nul
 
 REM Check if git is available for configuration updates
-git --version ^>nul 2^>^&1
+git --version >nul 2>&1
 if errorlevel 1 (
     echo [INFO] Git not available, using Docker-only update...
-    goto docker_update_only
+    goto smart_docker_update
 )
 if not exist ".git" (
     echo [INFO] Not a git repository, using Docker-only update...
-    goto docker_update_only
+    goto smart_docker_update
 )
 
 REM Get current version
@@ -35,101 +37,130 @@ set CURRENT_VERSION=unknown
 if exist "version-info.json" (
     for /f "tokens=2 delims=:, " %%a in ('findstr "version" version-info.json') do (
         set CURRENT_VERSION=%%a
-        set CURRENT_VERSION="=
+        set CURRENT_VERSION=^"=^^
     )
 )
-echo [INFO] Current version: 
+echo [INFO] Current version: ^
 
 REM Fetch and check for updates
 echo [INFO] Checking for configuration updates from GitHub...
-git fetch origin 2^>nul
+git fetch origin >nul 2>&1
 if errorlevel 1 (
     echo [WARNING] Could not fetch from GitHub, using Docker-only update
-    goto docker_update_only
+    goto smart_docker_update
 )
 
+REM Get latest version from GitHub
+set LATEST_VERSION=unknown
 for /f "tokens=*" %%a in ('git describe --tags origin/main 2^>nul') do set LATEST_VERSION=%%a
-if ""=="" set LATEST_VERSION=
-echo [INFO] Latest version available: 
+if "^^"=="unknown" set LATEST_VERSION=^
+echo [INFO] Latest version available: ^
 
-if ""=="" (
+if "^^"=="^^" (
     echo [INFO] ✅ Configuration is up to date
-    goto docker_update_only
+    goto smart_docker_update
 )
 
-echo [INFO] 🆕 New configuration version available: 
+echo [INFO] 🆕 New configuration version available: ^
 echo [INFO] Updating configuration files...
 
 REM Update configuration with validation
-git reset --hard origin/main 2^>nul
+git reset --hard origin/main >nul 2>&1
 if errorlevel 1 goto rollback_config
 
 REM Validate new configuration
 echo [INFO] Validating new configuration...
-docker-compose config ^>nul 2^>^&1
+docker-compose config >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] New configuration is invalid
+    echo [ERROR] New configuration is invalid^
     goto rollback_config
 )
 
 echo [SUCCESS] Configuration updated and validated
-goto docker_update_only
+goto smart_docker_update
 
 :rollback_config
 echo [ERROR] Configuration update failed, rolling back...
-if exist "docker-compose.yml.restore." (
-    copy docker-compose.yml.restore. docker-compose.yml >nul
+if exist "docker-compose.yml.restore.^^" (
+    copy docker-compose.yml.restore.^ docker-compose.yml >nul 2>&1
     echo [SUCCESS] Configuration rolled back to restore point
 ) else (
     echo [WARNING] No restore point available
 )
 
-:docker_update_only
+:smart_docker_update
+REM Smart Docker update - only restart if images changed
+echo [INFO] Checking for Docker image updates...
+set IMAGES_UPDATED=false
+
+REM Get current image info before pull
+docker-compose images --format "table {{.Service}}\t{{.Image}}\t{{.ID}}" > before-images.tmp 2>nul
+
 REM Pull latest Docker images
 echo [INFO] Pulling latest Docker images from Docker Hub...
 docker-compose pull
 if errorlevel 1 (
     echo [ERROR] Failed to pull latest images
+    del before-images.tmp 2>nul
     goto show_rollback_options
 )
 
-REM Restart services with rollback support
-echo [INFO] Restarting services with updates...
-docker-compose down
-docker-compose up -d
+REM Check if images were actually updated
+docker-compose images --format "table {{.Service}}\t{{.Image}}\t{{.ID}}" > after-images.tmp 2>nul
+fc before-images.tmp after-images.tmp >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Failed to start services with new configuration
-    goto rollback_services
+    set IMAGES_UPDATED=true
+    echo [INFO] 🆕 New Docker images detected, restart required
+) else (
+    echo [INFO] ✅ Docker images are up to date, no restart needed
 )
 
-REM Verify services are healthy
-echo [INFO] Verifying services are running...
-timeout /t 15 /nobreak >nul
-docker-compose ps | findstr "Up" >nul
-if errorlevel 1 (
-    echo [WARNING] Some services may not be running properly
-    goto show_rollback_options
+REM Clean up temp files
+del before-images.tmp after-images.tmp 2>nul
+
+REM Only restart if images were actually updated
+if "^^"=="true" (
+    echo [INFO] Restarting services with updates...
+    docker-compose down
+    docker-compose up -d
+    if errorlevel 1 (
+        echo [ERROR] Failed to start services
+        goto rollback_services
+    )
+
+    REM Verify services are healthy
+    echo [INFO] Verifying services are running...
+    timeout /t 15 /nobreak >nul
+    docker-compose ps ^| findstr "Up" >nul
+    if errorlevel 1 (
+        echo [WARNING] Some services may not be running properly
+        goto show_rollback_options
+    )
+
+    echo ✅ Update completed successfully^
+) else (
+    echo ✅ System is already up to date - no restart needed^
 )
 
-echo ✅ Update completed successfully
 echo 🌐 Frontend: http://localhost:3000
 echo 📚 API Docs: http://localhost:8000/docs
 echo.
-REM Cleanup old restore points after successful update (keep last 3)
+
+REM Cleanup old restore points (keep last 3)
 echo [INFO] Cleaning up old restore points...
-set COUNT=0
+set /a CLEANUP_COUNT=0
 for /f "skip=3" %%f in ('dir /b /o-d *.restore.* 2^>nul') do (
-    del "%%f" 2^>nul
-    set /a COUNT+=1
+    del "%%f" 2>nul
+    set /a CLEANUP_COUNT+=1
 )
-if  gtr 0 echo [INFO] Cleaned up  old restore points
+if ^ gtr 0 echo [INFO] Cleaned up ^ old restore points
 goto end
 
 :rollback_services
 echo [ERROR] Service startup failed, attempting rollback...
-if exist "docker-compose.yml.restore." (
+if exist "docker-compose.yml.restore.^^" (
     echo [INFO] Rolling back to previous configuration...
-    copy docker-compose.yml.restore. docker-compose.yml >nul
+    copy docker-compose.yml.restore.^ docker-compose.yml >nul 2>&1
     docker-compose down
     docker-compose up -d
     if errorlevel 1 (
@@ -145,28 +176,28 @@ if exist "docker-compose.yml.restore." (
 goto show_rollback_options
 
 :show_rollback_options
-
+echo.
 echo 🛠️  ROLLBACK OPTIONS:
 echo.
 echo Available restore points:
-dir /b *.restore.* 2^>nul ^|^| echo   No restore points found
-
+dir /b *.restore.* 2>nul ^|^| echo   No restore points found
+echo.
 echo Manual rollback commands:
 echo   1. Configuration rollback:
-echo      copy docker-compose.yml.restore. docker-compose.yml
-echo      docker-compose down && docker-compose up -d
+echo      copy docker-compose.yml.restore.^ docker-compose.yml
+echo      docker-compose down ^&^& docker-compose up -d
 echo.
 echo   2. Version rollback (if git available):
 echo      git checkout v1.0.0  (replace with desired version)
-echo      docker-compose down && docker-compose up -d
+echo      docker-compose down ^&^& docker-compose up -d
 echo.
 echo   3. Return to latest:
 echo      git checkout main
-echo      docker-compose down && docker-compose up -d
+echo      docker-compose down ^&^& docker-compose up -d
 echo.
 echo   4. Complete reset:
 echo      git reset --hard origin/main
-echo      docker-compose down && docker-compose up -d
+echo      docker-compose down ^&^& docker-compose up -d
 echo.
 :end
 pause
