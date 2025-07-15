@@ -2,7 +2,8 @@ services:
   api:
     image: bharathbalu/stereo-video-generation-app-api:latest
     restart: always
-    network_mode: host
+    ports:
+      - "8000:8000"
     volumes:
       - uploads_data:/app/uploads
       - outputs_data:/app/outputs
@@ -10,28 +11,28 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - PYTHONUNBUFFERED=1
-      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@localhost:5432/svg
-      - REDIS_URL=redis://localhost:6379/0
-      - CORS_ORIGINS=*
-      - ALLOWED_HOSTS=*
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/svg
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       - postgres
       - redis
 
   redis:
     image: redis:alpine
-    network_mode: host
+    ports:
+      - "6379:6379"
     volumes:
       - redis_data:/data
 
   postgres:
     image: postgres:14
     restart: always
-    network_mode: host
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: svg
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -39,11 +40,10 @@ services:
     image: bharathbalu/stereo-video-generation-app-celery:latest
     container_name: celery_worker-1
     restart: always
-    network_mode: host
     command: ["celery", "-A", "app.workers.tasks", "worker", "--loglevel=info"]
     environment:
-      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@localhost:5432/svg
-      - REDIS_URL=redis://localhost:6379/0
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/svg
+      - REDIS_URL=redis://redis:6379/0
       - SKIP_DB_INIT=true
     volumes:
       - outputs_data:/app/outputs
@@ -57,7 +57,6 @@ services:
     image: bharathbalu/depthcrafter:latest
     container_name: depthcrafter-1
     runtime: nvidia
-    network_mode: host
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     volumes:
@@ -65,6 +64,8 @@ services:
       - uploads_data:/app/uploads
       - tests_data:/app/tests
       - depthcrafter_cache:/root/.cache
+    ports:
+      - "8002:8000"
     deploy:
       resources:
         reservations:
@@ -76,7 +77,6 @@ services:
   ml_depth_pro:
     image: bharathbalu/ml-depth-pro:latest
     runtime: nvidia
-    network_mode: host
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     volumes:
@@ -93,7 +93,6 @@ services:
   marigold:
     image: bharathbalu/marigold:latest
     runtime: nvidia
-    network_mode: host
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     volumes:
@@ -111,7 +110,6 @@ services:
     image: bharathbalu/rolling-depth:latest
     container_name: rolling-depth-1
     runtime: nvidia
-    network_mode: host
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     volumes:
@@ -130,7 +128,6 @@ services:
   distill_any_depth:
     image: bharathbalu/distill-any-depth:latest
     runtime: nvidia
-    network_mode: host
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     volumes:
@@ -148,7 +145,6 @@ services:
   video_depth_anything:
     image: bharathbalu/video-depth-anything:latest
     runtime: nvidia
-    network_mode: host
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     volumes:
@@ -156,6 +152,8 @@ services:
       - uploads_data:/app/uploads
       - tests_data:/app/tests
       - video_depth_anything_cache:/root/.cache
+    ports:
+      - "8003:8000"
     deploy:
       resources:
         reservations:
@@ -168,13 +166,14 @@ services:
     image: bharathbalu/depth-to-stereo:latest
     container_name: 3d-pipeline-1
     runtime: nvidia
-    network_mode: host
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     volumes:
       - outputs_data:/app/outputs
       - uploads_data:/app/uploads
       - depth_to_stereo_cache:/root/.cache
+    ports:
+      - "8001:8000"
     deploy:
       resources:
         reservations:
@@ -185,7 +184,8 @@ services:
 
   frontend:
     image: bharathbalu/stereo-video-generation-app-frontend:latest
-    network_mode: host
+    ports:
+      - "3000:80"
     depends_on:
       - api
 
